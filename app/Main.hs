@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE QuasiQuotes, TemplateHaskell #-}
 
 module Main where
 
@@ -21,7 +22,10 @@ import Data.Monoid
 
 import Web.Scotty
 import Network.HTTP.Types
+import Text.Hamlet (shamlet)
+import Text.Blaze.Html.Renderer.String (renderHtml)
 
+-- |Conduit pipeline for filtering java SLF4J logs by searched string
 logFiltrationConduit :: MonadResource m => FilePath -> String -> ConduitM a c m BS.ByteString
 logFiltrationConduit logFile searchString =
   C.sourceFile logFile
@@ -41,7 +45,7 @@ filerLogBlocks searchString = do
         else filerLogBlocks searchString
     Nothing -> return ()
 
--- altered "lines" function from conduit-extra
+-- |Splits java log file to log entries (altered "lines" function from conduit-extra)
 splitToLogEntries :: Monad m => Conduit BS.ByteString m BS.ByteString
 splitToLogEntries =
     loop []
@@ -59,6 +63,7 @@ splitToLogEntries =
       where
         (first, second) = takeBlock more
 
+-- |Reads log entry from ByteString and return the log entry and the rest part of string
 takeBlock :: BS.ByteString -> (BS.ByteString, BS.ByteString)
 takeBlock bs = takeFirestLine bs
   where
@@ -80,21 +85,29 @@ takeBlock bs = takeFirestLine bs
               in (BS.pack "\n" <> line <> nextLines, nextRest)
         Nothing -> (BS.pack "", BS.pack "")
 
+-- |Checks if given line is a start of another log entry or a part of the previous log entry
 isNewLogLine :: BS.ByteString -> Bool
 isNewLogLine bs =
   case BS.uncons bs of
     Just (first, rest) -> (first >= '0' && first <= '9')
     Nothing -> False
 
+-- |Program takes 2 parameters: port and full path to log file
 main :: IO ()
 main = do
   params@(port:logFile:[]) <- getArgs
   scotty (read port) $ do
+
     get "/incident/:incidentId" $ do
       (incidentId :: String) <- param "incidentId"
       resp <- liftIO $ runConduitRes $ logFiltrationConduit logFile ("incident:" ++ incidentId)
-      html $ mconcat ["<h1>Logs with incidentId:", T.pack incidentId, "</h1>\n\n", "<pre>", T.fromStrict $ TE.decodeUtf8 resp, "</pre>"]
+      html $ T.pack $ renderHtml [shamlet|
+        <html>
+          <body>
+            <h1>Logs with incidentId: #{T.pack incidentId}
+            <pre> #{ TE.decodeUtf8 resp}
+      |]
 
     notFound $ do
       status notFound404
-      html "<h1>Not such page</h1>"
+      html "<html><body><h1>Not such page</h1></body></html>"
