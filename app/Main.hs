@@ -5,6 +5,8 @@
 
 module Main where
 
+import Slf4jLogs
+
 import System.Environment
 import qualified Data.Text.Lazy as T
 import qualified Data.Text.Encoding as TE
@@ -18,7 +20,6 @@ import qualified Data.Conduit.Combinators as CC
 import Control.Monad (unless, when)
 import Control.Monad.Trans.Resource
 import Control.Monad.IO.Class
-import Data.Monoid
 
 import Web.Scotty
 import Network.HTTP.Types
@@ -61,36 +62,7 @@ splitToLogEntries =
             Just (_, second') -> yield (BS.concat $ reverse $ (first:acc ++ [BS.pack "\n"]) ) >> go [] second'
             Nothing -> loop $ more:acc
       where
-        (first, second) = takeBlock more
-
--- |Reads log entry from ByteString and return the log entry and the rest part of string
-takeBlock :: BS.ByteString -> (BS.ByteString, BS.ByteString)
-takeBlock bs = takeFirestLine bs
-  where
-    takeFirestLine bs' =
-      let
-        (line, rest) = BS.breakSubstring (BS.pack "\n") bs'
-        (nextLines, nextRest) = takeNextLine rest
-      in (line <> nextLines, nextRest)
-    takeNextLine bs' =
-      case BS.uncons bs' of
-        Just (newLineChar, lTrimmed) ->
-          if isNewLogLine lTrimmed
-            then
-              (BS.pack "", bs')
-            else
-              let
-                (line, rest) = BS.breakSubstring (BS.pack "\n") lTrimmed
-                (nextLines, nextRest) = takeNextLine rest
-              in (BS.pack "\n" <> line <> nextLines, nextRest)
-        Nothing -> (BS.pack "", BS.pack "")
-
--- |Checks if given line is a start of another log entry or a part of the previous log entry
-isNewLogLine :: BS.ByteString -> Bool
-isNewLogLine bs =
-  case BS.uncons bs of
-    Just (first, rest) -> (first >= '0' && first <= '9')
-    Nothing -> False
+        (first, second) = Slf4jLogs.takeBlock more
 
 -- |Program takes 2 parameters: port and full path to log file
 main :: IO ()
