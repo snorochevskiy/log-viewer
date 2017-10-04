@@ -36,6 +36,7 @@ takeBlockTest = testGroup "Testing takeBlock" [
     (assertEqual "Should consider as a new log entry start"
     (BS.pack "02:59:06.246 34007377 [http-nio-8080-exec-9] INFO  com.xya.Aaa - A",
      BS.pack "\n02:59:06.246 34007377 [http-nio-8080-exec-9] INFO  com.xya.Aaa - B")
-    $ takeBlock $ BS.pack "02:59:06.246 34007377 [http-nio-8080-exec-9] INFO  com.xya.Aaa - A\n02:59:06.246 34007377 [http-nio-8080-exec-9] INFO  com.xya.Aaa - B")
+    $ takeBlock $ BS.pack "02:59:06.246 34007377 [http-nio-8080-exec-9] INFO  com.xya.Aaa - A\n\
+                          \02:59:06.246 34007377 [http-nio-8080-exec-9] INFO  com.xya.Aaa - B")
 
   ]
