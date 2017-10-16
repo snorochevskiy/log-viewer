@@ -8,6 +8,10 @@ module Main where
 import Slf4jLogs
 
 import System.Environment
+import System.Directory
+
+import System.FilePath
+
 import qualified Data.Text.Lazy as T
 import qualified Data.Text.Encoding as TE
 
@@ -64,6 +68,25 @@ splitToLogEntries =
       where
         (first, second) = Slf4jLogs.takeBlock more
 
+searchLogsByText :: String -> String -> IO BS.ByteString
+searchLogsByText path searchedText = do
+  isDirectoryExists <- doesDirectoryExist path
+  if isDirectoryExists
+    then do
+      files <- listDirectory path
+      searchInFiles files searchedText
+    else do
+      res <- liftIO $ runConduitRes $ logFiltrationConduit path searchedText
+      return res
+  where
+    searchInFiles :: [String] -> String -> IO BS.ByteString
+    searchInFiles (file:files) searchedText = do
+      res <- liftIO $ runConduitRes $ logFiltrationConduit (path </> file) searchedText
+      if BS.null res
+        then searchInFiles files searchedText
+        else return res
+    searchInFiles [] _ = return $ BS.pack ""
+
 -- |Program takes 2 parameters: port and full path to log file
 main :: IO ()
 main = do
@@ -72,7 +95,7 @@ main = do
 
     get "/incident/:incidentId" $ do
       (incidentId :: String) <- param "incidentId"
-      resp <- liftIO $ runConduitRes $ logFiltrationConduit logFile ("incident:" ++ incidentId)
+      resp <- liftIO $ searchLogsByText logFile ("incident:" ++ incidentId)
       html $ T.pack $ renderHtml [shamlet|
         <html>
           <body>
